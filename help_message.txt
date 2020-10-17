@@ -1,0 +1,28 @@
+🥳Witaj w Poszukiwaczu Aukcji🥳
+
+Aby rozpocząć przygodę wejdź na dowolny obsługiwalny serwis:
+otomoto.pl, olx.pl i allegrolokalnie.pl
+
+Po tej czynności przefiltruj aukcje tak jak robisz to zazwyczaj
+Ustal np. maksymalną cenę, model samochodu, nazwę produktu, czy też rodzaj umowy o pracę w serwisie
+
+Gdy odpowienio przefiltrujesz już interesujące oferty wybierz <b>Sortowanie po najnowszych</b>, aby otrzymywać najnowsze oferty
+Możesz wybrać równierz od najtańszych, od najdrowszych itp.
+Jednakże, jeśli zapomnisz ustawić sortowania po najnowszych Bot Ci o tym przypomni 😄
+
+Teraz wystarczy że skopiujesz link URL <i>(ten w pasku)</i> i wyślesz go do Bota
+Tak jakbyś chciał wysłać zwykłą wiadomość, Bot wykryje ten link URL i zapyta Ciebie o przypisanie go
+do jednego z 3 miejsc śledzących.
+
+/pomoc - wyświetla tą wiadomość
+/ustawienia - zwraca Twoje ustawienia
+/coileczasu - ustawia co ile czasu mają być sprawdzane oferty
+/dodajsprawdzenia - dodaje ilość sprawdzeń
+/usunlink - usuwa link śledzący aukcjie
+/dealer - <b>Ustawia czy chcesz otrzymywać ofert od dealerów na OtoMoto</b>
+/stop - zatrzymuje Bota
+/start - wznawia pracę bota
+
+🥳 🤩 To wszystko, możesz zacząć korzystać z Bota 🤩 🥳
+
+
