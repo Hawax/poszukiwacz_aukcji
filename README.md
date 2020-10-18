@@ -6,7 +6,9 @@ Jest to prosty bot napisany w [pyTelegramBotAPI](https://github.com/eternnoir/py
 
 # Wersja Live - t.me/PoszukiwaczAukcji_bot
 Instrukcja i demo jak działa bot: https://streamable.com/9rqv6g
-------------------------------------------------------------------
+
+
+# Engilsh 
 
 It is a simple bot written in pyTelegramBotAPI which sends out the latest offers from services:
 - otomoto.pl, 
