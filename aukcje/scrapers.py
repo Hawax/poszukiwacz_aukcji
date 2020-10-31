@@ -6,17 +6,16 @@ from bs4 import BeautifulSoup
 
 def get_element(list):
     try:
-        return list[0].text.replace('\n', '')
+        return list[0].text.replace('\n','')
     except:
         return None
-
 
 class Node:
     @staticmethod
     def childTexts(node):
-        texts = {}
+        texts={}
         for child in list(node):
-            texts[child.tag] = child.text
+            texts[child.tag]=child.text
         return texts['span']
 
 
@@ -43,10 +42,10 @@ class OtoMotoScraper(Scraper):
         response = self.open_connection(url)
         tree = lxml.html.fromstring(response.content)
         articles = tree.xpath('//article')
-        data = {which_one: []}
+        data = {which_one:[]}
         for article in articles:
             parms = {}
-            tree = lxml.html.fromstring(lxml.html.tostring(article))  # makes tree from article
+            tree = lxml.html.fromstring(lxml.html.tostring(article))
             name = str(tree.xpath("//a[@class='offer-title__link']")[0].text).strip()
             try:
                 description = str(
@@ -58,9 +57,9 @@ class OtoMotoScraper(Scraper):
                 parms.update({car_parm.attrib['data-code']: Node.childTexts(car_parm)})
 
             location = tree.xpath("//span[@class='ds-location-city']")[0].text + ' ' + \
-                       tree.xpath("//span[@class='ds-location-region']")[0].text
+                           tree.xpath("//span[@class='ds-location-region']")[0].text
             price = tree.xpath("//span[@class='offer-price__number ds-price-number' and 1]/span[1]")[0].text + ' ' + \
-                    tree.xpath("//span[@class='offer-price__number ds-price-number' and 1]/span[2]")[0].text
+                        tree.xpath("//span[@class='offer-price__number ds-price-number' and 1]/span[2]")[0].text
             dealer = tree.xpath("//a[@class='offer-item__link-logo ds-image-button' and 1]/span[1]") + tree.xpath(
                 "//a[@class='offer-item__link-seller ds-seller-link' and 1]")
             car_id = article.attrib['data-ad-id']
@@ -98,12 +97,14 @@ class OlxScraper(Scraper):
 
         for article in articles:
             tree = lxml.html.fromstring(lxml.html.tostring(article))
-            soup = BeautifulSoup(lxml.html.tostring(article), "html.parser") #had to use bs4 beacuse lxml does not work properly
+            soup = BeautifulSoup(lxml.html.tostring(article), "html.parser")
             where_and_when = " ".join(soup.find_all('td', {'class': 'bottom-cell'})[0].text.split())
-            name = str(tree.xpath("//a[1]/strong[1]")[0].text).strip().replace('\n', '')
-            price = get_element(tree.xpath("//p[1]/strong[1]")) or soup.find_all('div', {'class': 'list-item__price'})[
-                0].text.replace('\n', '') or 'Brak informacji'
+            name = str(tree.xpath("//a[1]/strong[1]")[0].text).strip().replace('\n','')
             offer_id = tree.xpath("//div[@class='offer-wrapper']//table")[0].attrib['data-id']
+            try:
+                price = get_element(tree.xpath("//p[1]/strong[1]")) or soup.find_all('div', {'class': 'list-item__price'})[0].text.replace('\n','') or 'Brak informacji'
+            except:
+                price = 'Brak informacji'
             try:
                 link = tree.xpath("//td/a")[0].attrib['href']
             except IndexError:
@@ -136,15 +137,10 @@ class AllegroLokalnieScraper(Scraper):
             tree = lxml.html.fromstring(lxml.html.tostring(article))
             soup = BeautifulSoup(lxml.html.tostring(article), "html.parser")
             name = tree.xpath("//h3[@class='offer-card__title']")[0].text.strip()
-            price = tree.xpath("//span[@class='price offer-card--buy-now' and 1]") or \
-                    tree.xpath("//span[@class='price offer-card--bidding' and 1]") or \
-                    tree.xpath("//span[@class='price offer-card--classified' and 1]")
-            kind_offer = tree.xpath(
-                "//div[@class='text-11 text-uppercase fw-semi m-b-1 offer-card__type offer-card--classified' and 2]") or \
-                         tree.xpath(
-                             "//div[@class='text-11 text-uppercase fw-semi m-b-1 offer-card__type offer-card--buy-now' and 2]") or \
-                         tree.xpath(
-                             "//div[@class='text-11 text-uppercase fw-semi m-b-1 offer-card__type offer-card--bidding']")
+            price = tree.xpath("//span[@class='price offer-card--buy-now' and 1]") or tree.xpath("//span[@class='price offer-card--bidding' and 1]") or tree.xpath("//span[@class='price offer-card--classified' and 1]")
+            kind_offer = tree.xpath("//div[@class='text-11 text-uppercase fw-semi m-b-1 offer-card__type offer-card--classified' and 2]") or \
+                         tree.xpath("//div[@class='text-11 text-uppercase fw-semi m-b-1 offer-card__type offer-card--buy-now' and 2]") or \
+                         tree.xpath("//div[@class='text-11 text-uppercase fw-semi m-b-1 offer-card__type offer-card--bidding']")
             location = tree.xpath("//div[@class='offer-card__location']/span[1]")[0]
             photo = tree.xpath("//div/img[1]")[0].attrib['src']
             link = tree.xpath("//a[1]")[0].attrib['href']
@@ -157,7 +153,7 @@ class AllegroLokalnieScraper(Scraper):
                 'id': str(link),
                 'name': str(name),
                 'photo': str(photo),
-                'link': str("https://allegrolokalnie.pl" + link),
+                'link': str("https://allegrolokalnie.pl"+link),
                 'price': str(price[0].text) + ',00zł',
                 'description': str(description),
                 'location': str(location.text),
@@ -166,3 +162,6 @@ class AllegroLokalnieScraper(Scraper):
             })
 
         return data
+
+
+#AllegroLokalnieScraper().scrape('https://allegrolokalnie.pl/oferty/dom-i-ogrod?phrase=&city=&sort=startingTime-desc&price_from=&price_to=&sort=startingTime-desc&page=1&page=1','url1')

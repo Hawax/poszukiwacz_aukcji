@@ -2,30 +2,14 @@ from sqlalchemy import create_engine
 
 from aukcje import session
 from aukcje.get_new_offers import NewOffers
+from aukcje.models import User
 from aukcje.scrapers import OtoMotoScraper, OlxScraper, AllegroLokalnieScraper
 from aukcje.parsers import OtoMotoParser, OlxParser, AllegroLokalnieParser
 import time
 from aukcje import bot
 from telebot import types
 from contextlib import contextmanager
-from sqlalchemy.orm import sessionmaker
 
-@contextmanager
-def session_scope():
-    """Provide a transactional scope around a series of operations."""
-    Session = sessionmaker()
-    db = create_engine('sqlite:///database.db', connect_args={'check_same_thread': False})
-    Session.configure(bind=db)
-    session = Session()
-
-    try:
-        yield session
-        session.commit()
-    except:
-        session.rollback()
-        raise
-    finally:
-        session.close()
 
 
 def start_markup():
@@ -55,10 +39,13 @@ def get_good_parser(domain):
 
 class JobStarter():
     @staticmethod
-    def start(user):
+    def start(user_id_telegram):
+        session_thread_safe = session()
+        user = session_thread_safe.query(User).filter_by(id_telegram=user_id_telegram).first()
+
         while True:
             time.sleep(15)
-            if user.start == False:
+            if user.start == False or user.urls is None:
                 break
             for dicts in list(user.urls.items()).copy():
                 if dicts is None:
@@ -71,17 +58,19 @@ class JobStarter():
                 diffs = NewOffers.diff(new_offers, old_offers, domain, user)
                 if diffs:
                     for diff in diffs:
-                        text, photo = get_good_parser(domain)().parse(diff)
+                        text, photo = get_good_parser(domain)().parse(diff, user)
                         bot.send_photo(user.id_telegram, photo=photo, caption=text, parse_mode='HTML')
                     user.urls_data[dicts[0]] = new_offers
                 user.checks -= 1
-                with session_scope() as session:
-                    session.commit()
+                session_thread_safe.commit()
+
             if user.checks < 0:
                 bot.send_message(user.id_telegram, '<b>Sprawdzanie zostaje zatrzymane wpisz</b> /start <b>aby wznowic prace</b>',parse_mode='HTML', reply_markup=start_markup())
                 user.start = False
-                session.commit()
-                break
+                session_thread_safe.commit()
+
+
+
             time.sleep(user.timeout)
 
 

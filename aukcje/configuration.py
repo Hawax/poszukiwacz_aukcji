@@ -1,13 +1,14 @@
 import datetime
+
 from aukcje import bot
 import tldextract
 from telebot import types
-from aukcje import session
+from aukcje import session_scope
 from aukcje.job_creator import start_markup
 from aukcje.models import User
 from aukcje.domains import Domains
 import re
-
+from aukcje.monetize import monetize_url
 
 HOW_IT_HAPPEND = 'Nie mam pojęcia jak to sie stało ale najpierw wpisz komendę /start 🙄'
 
@@ -50,15 +51,16 @@ def check_url(url, domain, message):
 
 def add_link_to_database(message, domain, url):
     if message.text in ['/link1', '/link2', '/link3']:
-        last_dig = message.text[-1]
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user:
-            user.urls[f'url{last_dig}'] = (domain, url)
-            bot.send_message(message.chat.id, f'Super, ustawiłem link nr.{last_dig} na \n{url}',
-                         disable_web_page_preview=True, reply_markup=make_default_keyboard())
-            session.commit()
-        else:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=message.chat.id).first()
+            if user:
+                last_dig = message.text[-1]
+                user.urls[f'url{last_dig}'] = (domain, url)
+                bot.send_message(message.chat.id, f'Super, ustawiłem link nr.{last_dig} na \n{url}',
+                             disable_web_page_preview=True, reply_markup=make_default_keyboard())
+                session.commit()
+            else:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
     else:
 
         bot.send_message(message.chat.id, 'Zła komenda', reply_markup=make_default_keyboard())
@@ -70,56 +72,73 @@ def find_url_in_message_text(regexp_string, message):
     return result
 
 
-def get_url_to_settings(list):
+def get_url_to_settings(list, user):
     try:
-        return f"{list[0]} : \n{list[1]}"
+        return f"{list[0]} : \n{monetize_url(list[1], user)}"
     except:
         return None
 
 
-def remove_link_from_database(message, user):
+def remove_link_from_database(message, user_id_telegram):
     if message.text in ['/link1', '/link2', '/link3']:
-        last_dig = message.text[-1]
-        if user:
-            try:
-                del user.urls[f'url{last_dig}']
-            except: pass # not exist
-            bot.send_message(message.chat.id, f'Super, usunąłem link nr.{last_dig}', reply_markup=make_default_keyboard())
-            session.commit()
-        else:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=user_id_telegram).first()
+            if user:
+                print(user.urls)
+                last_dig = message.text[-1]
+                try:
+                    del user.urls[f'url{last_dig}']
+                except: pass
+                bot.send_message(message.chat.id, f'Super, usunąłem link nr.{last_dig}', reply_markup=make_default_keyboard())
+
+                session.commit()
+            else:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
     else:
         bot.send_message(message.chat.id, 'Zła komenda', reply_markup=make_default_keyboard())
 
 
-def set_timeout(message, user):
+def set_timeout(message, user_id_telegram):
     try:
-        timeout = int(message.text)
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=user_id_telegram).first()
+            timeout = int(message.text)
+            if timeout < 300:
+                bot.send_message(message.chat.id, 'Za mała wartość musi być większa niż 300 sekund (5 min)')
+            elif timeout > 1800:
+                bot.send_message(message.chat.id, 'Za duża wartość musi być mniejasz niż 1800 sekund (30 min)')
+            else:
+                with session_scope() as session:
+                    user.timeout = timeout
+                    session.commit()
+                bot.send_message(message.chat.id,
+                                 f'Pomyślnie ustawiono czas na {timeout} sekund ({round(timeout / 60, 2)} minut)')
+
     except:
         bot.send_message(message.chat.id, 'Zła wartość')
         return
 
-    if timeout < 300:
-        bot.send_message(message.chat.id, 'Za mała wartość musi być większa niż 300 sekund (5 min)')
-    elif timeout > 1800:
-        bot.send_message(message.chat.id, 'Za duża wartość musi być mniejasz niż 1800 sekund (30 min)')
-    else:
-        user.timeout = timeout
-        session.commit()
-        bot.send_message(message.chat.id, f'Pomyślnie ustawiono czas na {timeout} sekund ({round(timeout/60, 2)} minut)')
 
+def set_dealer(message, user_id_telegram):
+    with session_scope() as session:
+        user = session.query(User).filter_by(id_telegram=user_id_telegram).first()
 
-def set_dealer(message, user):
-    if message.text.lower() == 'tak':
-        bot.send_message(message.chat.id, f'😄Bedziesz otrzymywać oferty od dilerów na OtoMoto 😄')
-        user.dealer = True
-        session.commit()
-    elif message.text.lower() == 'nie':
-         bot.send_message(message.chat.id, f'😁 <b>NIE</b> bedziesz otrzymywać ofert od dilerów na OtoMoto 😁', parse_mode='HTML')
-         user.dealer = False
-         session.commit()
-    else:
-        bot.send_message(message.chat.id, f'Musisz podać Tak lub Nie 😡')
+        if message.text.lower() == 'tak':
+            bot.send_message(message.chat.id, f'😄Bedziesz otrzymywać oferty od dilerów na OtoMoto 😄')
+            with session_scope() as session:
+                user.dealer = True
+                session.commit()
+        elif message.text.lower() == 'nie':
+             bot.send_message(message.chat.id, f'😁 <b>NIE</b> bedziesz otrzymywać ofert od dilerów na OtoMoto 😁', parse_mode='HTML')
+             with session_scope() as session:
+                 user.dealer = False
+                 session.commit()
+        else:
+            bot.send_message(message.chat.id, f'Musisz podać Tak lub Nie 😡')
+
+def get_how_many_links(user):
+    print(user.urls.items())
+    print(len(user.urls.items()))
 
 
 
@@ -128,9 +147,9 @@ class Configuration:
     regexp_string = r"(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))"
 
     @staticmethod
-    @bot.message_handler(regexp=regexp_string) #checks URL EXIST in message
+    @bot.message_handler(regexp=regexp_string)
     def check_for_url(message):
-        message.text = find_url_in_message_text(regexp_string, message) #it accually return URL not message!
+        message.text = find_url_in_message_text(regexp_string, message)
 
         parsed_url = tldextract.extract(message.text)
         domain = (parsed_url.domain + '.' + parsed_url.suffix)
@@ -148,83 +167,91 @@ class Configuration:
     @staticmethod
     @bot.message_handler(commands=['ustawienia', 'settings'])
     def return_settings(message):
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user is None:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
-            return
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=message.chat.id).first()
+            if user is None:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+                return
 
-        text = f"Twoje ustawienia:\n\n" \
-               f"link nr.1: {get_url_to_settings(user.urls.get('url1')) or 'Brak'}\n\n" \
-               f"link nr.2: {get_url_to_settings(user.urls.get('url2')) or 'Brak'}\n\n"\
-               f"link nr.3: {get_url_to_settings(user.urls.get('url3')) or 'Brak'}\n\n" \
-               f"Ile sprawdzeń: {user.checks}\n\n"\
-               f"Czy wysyłać samochody od dilerów: {'Tak' if user.dealer else 'Nie'}\n\n"\
-               f"Co ile sprawdzać: {user.timeout} sekund ({round(user.timeout/60, 2)} minut)\n\n"\
-               f"Bot wyłączy się dnia: {(datetime.datetime.now()+datetime.timedelta(seconds=(user.timeout*user.checks)/(len(user.urls.items()) or 1))).strftime('%d-%m-%Y o około %H:%M')} \n\n"
-        bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+            text = f"Twoje ustawienia:\n\n" \
+                   f"link nr.1: {get_url_to_settings(user.urls.get('url1'), user) or 'Brak'}\n\n" \
+                   f"link nr.2: {get_url_to_settings(user.urls.get('url2'), user) or 'Brak'}\n\n"\
+                   f"link nr.3: {get_url_to_settings(user.urls.get('url3'), user) or 'Brak'}\n\n" \
+                   f"Ile sprawdzeń: {user.checks}\n\n"\
+                   f"Czy wysyłać samochody od dilerów: {'Tak' if user.dealer else 'Nie'}\n\n"\
+                   f"Co ile sprawdzać: {user.timeout} sekund ({round(user.timeout/60, 2)} minut)\n\n"\
+                   f"Bot wyłączy się dnia: {(datetime.datetime.now()+datetime.timedelta(seconds=(user.timeout*user.checks)/(len(user.urls.items()) or 1))).strftime('%d-%m-%Y o około %H:%M')} \n\n"
+            bot.send_message(message.chat.id, text, disable_web_page_preview=True)
 
     @staticmethod
     @bot.message_handler(commands=['usunlink'])
     def delete_url(message):
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user is None:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
-            return
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=message.chat.id).first()
+            session.expunge(user)
+            if user is None:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+                return
 
-        text = f"Wybierz link do usunięcia"
-        bot.send_message(message.chat.id, text, disable_web_page_preview=True,  reply_markup=make_keyboard_url())
-        bot.register_next_step_handler(message, remove_link_from_database, user)
+            text = f"Wybierz link do usunięcia"
+            bot.send_message(message.chat.id, text, disable_web_page_preview=True,  reply_markup=make_keyboard_url())
+            bot.register_next_step_handler(message, remove_link_from_database, str(user.id_telegram))
+
 
     @staticmethod
     @bot.message_handler(commands=['dodajsprawdzenia'])
     def add_checks(message):
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user is None:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
-            return
-        if user.checks > 300:
-            text = f"Żeby dodać sprawdzenia musisz mieć mniej niż 300 sprawdzeń, " \
-                   f"aktualnie masz {user.checks} sprawdzeń. 😉"
-        else:
-            user.checks = 600
-            session.commit()
-            text = f"Pomyślnie dodano sprawdzenia i aktualnie masz ich 600! 🤩"
-        bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=message.chat.id).first()
+            if user is None:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+                return
+            if user.checks > 300:
+                text = f"Żeby dodać sprawdzenia musisz mieć mniej niż 300 sprawdzeń, " \
+                       f"aktualnie masz {user.checks} sprawdzeń. 😉"
+            else:
+                user.checks = 600
+                session.commit()
+                text = f"Pomyślnie dodano sprawdzenia i aktualnie masz ich 600! 🤩"
+            bot.send_message(message.chat.id, text, disable_web_page_preview=True)
 
     @staticmethod
     @bot.message_handler(commands=['coileczasu'])
     def add_checks(message):
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user is None:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
-            return
-        text = f"Podaj czas w sekundach, pamięaj nie może być mniejszy niż 300 sekund (5 min) 🥳"
-        bot.send_message(message.chat.id, text, disable_web_page_preview=True)
-        bot.register_next_step_handler(message, set_timeout, user)
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=message.chat.id).first()
+            if user is None:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+                return
+            text = f"Podaj czas w sekundach, pamięaj nie może być mniejszy niż 300 sekund (5 min) 🥳"
+            bot.send_message(message.chat.id, text, disable_web_page_preview=True)
+            bot.register_next_step_handler(message, set_timeout, str(user.id_telegram))
 
 
     @staticmethod
     @bot.message_handler(commands=['dealer'])
     def dealer(message):
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user is None:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
-            return
-        text = f"Wpisz <b>Tak</b> lub <b>Nie</b>"
-        bot.send_message(message.chat.id, text, disable_web_page_preview=True, parse_mode='HTML')
-        bot.register_next_step_handler(message, set_dealer, user)
+        with session_scope as session:
+            user = session().query(User).filter_by(id_telegram=message.chat.id).first()
+            if user is None:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+                return
+            text = f"Wpisz <b>Tak</b> lub <b>Nie</b>"
+            bot.send_message(message.chat.id, text, disable_web_page_preview=True, parse_mode='HTML')
+            bot.register_next_step_handler(message, set_dealer, str(user.id_telegram))
 
     @staticmethod
     @bot.message_handler(commands=['stop'])
-    def dealer(message):
-        user = session.query(User).filter_by(id_telegram=message.chat.id).first()
-        if user is None:
-            bot.send_message(message.chat.id, HOW_IT_HAPPEND)
-            return
-        text = f"<b>Bot zostaje zatrzymany</b>"
-        user.start = False
-        session.commit()
-        bot.send_message(message.chat.id, text, disable_web_page_preview=True, parse_mode='HTML', reply_markup=start_markup())
+    def stop_bot(message):
+        with session_scope() as session:
+            user = session.query(User).filter_by(id_telegram=message.chat.id).first()
+            if user is None:
+                bot.send_message(message.chat.id, HOW_IT_HAPPEND)
+                return
+            text = f"<b>Bot zostaje zatrzymany</b>"
+            user.start = False
+            session.commit()
+            bot.send_message(message.chat.id, text, disable_web_page_preview=True, parse_mode='HTML', reply_markup=start_markup())
 
     @staticmethod
     @bot.message_handler(commands=['pomoc'])
